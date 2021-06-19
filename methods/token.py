@@ -61,67 +61,21 @@ def issue(user_uuid: uuid.UUID, expiration: timedelta = timedelta(days=7),
     return True, encode(token)
 
 
-def check(token: str, for_admin: bool = False) -> bool:
+def check(token: str) -> bool:
     token = decode(token)
     sql = MySQL()
 
-    if not for_admin:
-        if sql.query("SELECT COUNT(*) FROM token WHERE token=%s AND created_at <= %s AND expires_at > %s",
-                     (token, datetime.now(), datetime.now()))[0][0] == 1:
-            return True
-        elif sql.query("SELECT COUNT(*) FROM token WHERE token=%s", (token, ))[0][0] != 0:
-            # Token expired
-            sql.query("DELETE FROM token WHERE token=%s", (token, ))
-    else:
-        if sql.query("SELECT COUNT(*) FROM token_admin WHERE token=%s AND created_at <= %s AND expires_at > %s",
-                     (token, datetime.now(), datetime.now()))[0][0] == 1:
-            return True
-        elif sql.query("SELECT COUNT(*) FROM token_admin WHERE token=%s", (token, ))[0][0] != 0:
-            # Token expired
-            sql.query("DELETE FROM token_admin WHERE token=%s", (token, ))
+    if sql.query("SELECT COUNT(*) FROM token WHERE token=%s AND created_at <= %s AND expires_at > %s",
+                 (token, datetime.now(), datetime.now()))[0][0] == 1:
+        return True
+    elif sql.query("SELECT COUNT(*) FROM token WHERE token=%s", (token, ))[0][0] != 0:
+        # Token expired
+        sql.query("DELETE FROM token WHERE token=%s", (token, ))
 
     return False
 
 
-def verify(token: str, for_admin: bool = False) -> bool:
-    token = decode(token)
-    sql = MySQL(dict_cursor=True)
-
-    if not for_admin:
-        query_res = sql.query("SELECT uuid user_uuid, user_agent, created_at created_time, expires_at expiration,"
-                              " created_ip FROM token WHERE token=%s", (token,))
-    else:
-        query_res = sql.query("SELECT uuid user_uuid, user_agent, created_at created_time, expires_at expiration,"
-                              " created_ip FROM token_admin WHERE token=%s", (token,))
-
-    if len(query_res) != 1:
-        return False
-
-    query_res = query_res[0]
-    query_res['user_uuid'] = uuid.UUID(bytes=query_res['user_uuid'])
-
-    if token == generate(**query_res):
-        return True
-    else:
-        return False
-
-
-def revoke(token: str) -> bool:
-    token = decode(token)
-    sql = MySQL()
-
-    sql.transaction.start()
-
-    sql.query('DELETE FROM token WHERE token=%s', (token, ))
-    if sql.query('SELECT ROW_COUNT()')[0][0] != 1:
-        sql.transaction.rollback()
-        return False
-    else:
-        sql.transaction.commit()
-        return True
-
-
-def get_owner(token: str) -> Union[uuid.UUID, None]:
+def get_uuid(token: str) -> Union[uuid.UUID, None]:
     token = decode(token)
     sql = MySQL()
 
@@ -132,4 +86,28 @@ def get_owner(token: str) -> Union[uuid.UUID, None]:
         return uuid.UUID(bytes=result[0][0])
 
 
-__all__ = ['issue', 'check', 'verify']
+def token_issue():
+    sql = MySQL()
+    user_uuid = uuid.uuid4()
+    while True:
+        if sql.query('SELECT COUNT(*) FROM token WHERE uuid=%s', (user_uuid.bytes,))[0][0] == 0:
+            break
+        else:
+            user_uuid = uuid.uuid4()
+    status, user_token = issue(user_uuid)
+    return status, user_token, user_uuid
+
+
+def token_validate(token: str) -> Tuple[bool, Union[str, None]]:
+    try:
+        if len(base64.b64decode(token.encode())) != 128:
+            return False, None
+    except:
+        return False, None
+    if not check(token):
+        return False, None
+    user_uuid = get_uuid(token)
+    return True, user_uuid
+
+
+__all__ = ['issue', 'check', 'token_validate', 'token_issue']

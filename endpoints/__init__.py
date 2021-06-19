@@ -1,12 +1,6 @@
 from functools import wraps
-from connector import Redis
-from typing import Callable, Union
-from methods import token
-from flask import request, jsonify, Response, session
-
-import uuid
-import json
-import base64
+from typing import Union
+from flask import request, jsonify, Response
 
 
 def is_api(required_keys=None, acceptable_keys=None, input_type: str = 'query_string'):
@@ -115,76 +109,8 @@ def cors_allow(host: str = '*', allowed_methods=None, allowed_headers=None,
     return decorator
 
 
-def csrf_set(func):
-    @wraps(func)
-    def decorator(*args, **kwargs):
-        issuer = func.__name__
-        token = uuid.uuid4().hex
-        try:
-            redis = Redis()
-            redis.set(token, json.dumps({'issuer': issuer, 'useragent': request.user_agent.string}))
-        except:
-            return jsonify({'error': 'csrf_issue_failed'}), 500
-        resp: Response = func(*args, **kwargs)
-        session['csrf_token'] = token
-        return resp
-    return decorator
+from .cookie_based import cookie_blueprint
+from .header_based import header_blueprint
 
 
-def csrf_required(csrf_setter: Callable):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            if 'csrf_token' not in session:
-                return jsonify({'error': 'csrf_verification_failed'}), 400
-            token = session['csrf_token']
-            try:
-                redis = Redis()
-                if not redis.exists(token):
-                    return jsonify({'error': 'csrf_verification_failed'}), 400
-                csrf_dict = json.loads(redis.get(session['csrf_token']))
-            except:
-                return jsonify({'error': 'csrf_verification_failed'}), 400
-            issuer = csrf_dict['issuer']
-            useragent = csrf_dict['useragent']
-
-            if issuer != csrf_setter.__name__:
-                return jsonify({'error': 'csrf_verification_failed'}), 400
-            if useragent != request.user_agent.string:
-                return jsonify({'error': 'csrf_verification_failed'}), 400
-            else:
-                return func(*args, **kwargs)
-        return wrapper
-    return decorator
-
-
-def protected(verify: bool = False):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            if 'Authorization' not in request.headers:
-                return jsonify({'error': 'no_permission'}), 403
-            auth: str = request.headers['Authorization']
-            if auth[:5].lower() != 'token':
-                return jsonify({'error': 'no_permission'}), 403
-            auth = auth.split(' ', 1)[1]
-            try:
-                if len(base64.b64decode(auth.encode())) != 128:
-                    return jsonify({'error': 'no_permission'}), 403
-            except:
-                return jsonify({'error': 'no_permission'}), 403
-            if not token.check(auth):
-                return jsonify({'error': 'no_permission'}), 403
-            owner, is_admin = token.get_owner(auth)
-            if verify or is_admin:
-                if not token.verify(auth):
-                    return jsonify({'error': 'no_permission'}), 403
-            return func(owner, auth, is_admin, *args, **kwargs)
-        return wrapper
-    return decorator
-
-
-from .article import article_blueprint
-
-
-__all__ = ['is_api', 'return_as_api', 'cors_allow', 'csrf_set', 'csrf_required', 'article_blueprint']
+__all__ = ['is_api', 'return_as_api', 'cors_allow', 'csrf_set', 'csrf_required']
