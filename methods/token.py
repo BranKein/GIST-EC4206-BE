@@ -35,8 +35,7 @@ def decode(token: str) -> bytes:
     return base64.b64decode(token.encode())
 
 
-def issue(user_uuid: uuid.UUID, expiration: timedelta = timedelta(days=7),
-          for_admin: bool = False) -> Tuple[bool, Union[str, None]]:
+def issue(user_uuid: uuid.UUID, expiration: timedelta = timedelta(days=7)) -> Tuple[bool, Union[str, None]]:
     user_agent = request.user_agent.string[:255]
     created_ip = tools.ip.ipv6ify(request.remote_addr)
     created_time = datetime.now().replace(microsecond=0)
@@ -47,14 +46,9 @@ def issue(user_uuid: uuid.UUID, expiration: timedelta = timedelta(days=7),
     sql = MySQL()
 
     try:
-        if not for_admin:
-            sql.query('INSERT INTO token (token, uuid, created_at, expires_at, user_agent, created_ip, last_seen_ip) '
-                      'VALUE (%s, %s, %s, %s, %s, %s, %s)',
-                      (token, user_uuid.bytes, created_time, expire_time, user_agent, created_ip, created_ip))
-        else:
-            sql.query('INSERT INTO token_admin (token, uuid, created_at, expires_at, user_agent, '
-                      'created_ip, last_seen_ip) VALUE (%s, %s, %s, %s, %s, %s, %s)',
-                      (token, user_uuid.bytes, created_time, expire_time, user_agent, created_ip, created_ip))
+        sql.query('INSERT INTO token (token, uuid, created_at, expires_at, user_agent, created_ip, last_seen_ip) '
+                  'VALUE (%s, %s, %s, %s, %s, %s, %s)',
+                  (token, user_uuid.bytes, created_time, expire_time, user_agent, created_ip, created_ip))
     except:
         return False, None
 
@@ -79,7 +73,7 @@ def get_uuid(token: str) -> Union[uuid.UUID, None]:
     token = decode(token)
     sql = MySQL()
 
-    result = sql.query('SELECT uuid FROM token_admin WHERE token=%s', (token,))
+    result = sql.query('SELECT uuid FROM token WHERE token=%s', (token,))
     if len(result) != 1:
         return None
     else:
