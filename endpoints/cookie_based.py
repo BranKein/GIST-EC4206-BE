@@ -5,7 +5,7 @@ from . import is_api, cors_allow
 cookie_blueprint = Blueprint('Cookie-Based', __name__)
 
 
-@cookie_blueprint.route('/setting', methods=['POST', 'OPTIONS'])
+@cookie_blueprint.route('/setting', methods=['GET', 'OPTIONS'])
 @cors_allow()
 @is_api()
 def set_cookie(data):

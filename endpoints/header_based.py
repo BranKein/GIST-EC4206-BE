@@ -5,7 +5,7 @@ from . import is_api, cors_allow
 header_blueprint = Blueprint('Header-Based', __name__)
 
 
-@header_blueprint.route('/setting', methods=['POST', 'OPTIONS'])
+@header_blueprint.route('/setting', methods=['GET', 'OPTIONS'])
 @cors_allow()
 @is_api()
 def set_token(data):
