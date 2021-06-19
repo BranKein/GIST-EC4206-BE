@@ -1,4 +1,5 @@
 from flask import Blueprint, session
+from constants import frontend_address
 from methods.token import token_validate, token_issue
 from . import is_api, cors_allow
 
@@ -6,7 +7,7 @@ cookie_blueprint = Blueprint('Cookie-Based', __name__)
 
 
 @cookie_blueprint.route('/setting', methods=['GET', 'OPTIONS'])
-@cors_allow()
+@cors_allow(frontend_address)
 @is_api()
 def set_cookie(data):
     status, user_token, user_uuid = token_issue()
@@ -19,7 +20,7 @@ def set_cookie(data):
 
 
 @cookie_blueprint.route('/validate', methods=['GET', 'OPTIONS'])
-@cors_allow()
+@cors_allow(frontend_address)
 @is_api()
 def validate(data):
     if 'user_token' not in session:
